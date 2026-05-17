@@ -148,48 +148,55 @@ class _TerminalScreenState extends State<TerminalScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          TerminalView(
-            _terminal,
-            controller: _terminalController,
-            autofocus: true,
-            textStyle: const TerminalStyle(
-              fontSize: 14,
-              fontFamily: 'monospace',
-            ),
-            theme: const TerminalTheme(
-              cursor: Color(0xFF00D4AA),
-              selection: Color(0xFF33475B),
-              foreground: Color(0xFFEEEEEE),
-              background: Color(0xFF1A1A2E),
-              black: Color(0xFF000000),
-              red: Color(0xFFFF6B6B),
-              green: Color(0xFF00D4AA),
-              yellow: Color(0xFFFFE66D),
-              blue: Color(0xFF4ECDC4),
-              magenta: Color(0xFFC792EA),
-              cyan: Color(0xFF89DDFF),
-              white: Color(0xFFEEEEEE),
-              brightBlack: Color(0xFF666666),
-              brightRed: Color(0xFFFF8A80),
-              brightGreen: Color(0xFF69F0AE),
-              brightYellow: Color(0xFFFFFF8D),
-              brightBlue: Color(0xFF80D8FF),
-              brightMagenta: Color(0xFFEA80FC),
-              brightCyan: Color(0xFFA7FDEB),
-              brightWhite: Color(0xFFFFFFFF),
-              searchHitBackground: Color(0xFFFFE66D),
-              searchHitBackgroundCurrent: Color(0xFFFF6B6B),
-              searchHitForeground: Color(0xFF000000),
+          Expanded(
+            child: Stack(
+              children: [
+                TerminalView(
+                  _terminal,
+                  controller: _terminalController,
+                  autofocus: true,
+                  textStyle: const TerminalStyle(
+                    fontSize: 14,
+                    fontFamily: 'monospace',
+                  ),
+                  theme: const TerminalTheme(
+                    cursor: Color(0xFF00D4AA),
+                    selection: Color(0xFF33475B),
+                    foreground: Color(0xFFEEEEEE),
+                    background: Color(0xFF1A1A2E),
+                    black: Color(0xFF000000),
+                    red: Color(0xFFFF6B6B),
+                    green: Color(0xFF00D4AA),
+                    yellow: Color(0xFFFFE66D),
+                    blue: Color(0xFF4ECDC4),
+                    magenta: Color(0xFFC792EA),
+                    cyan: Color(0xFF89DDFF),
+                    white: Color(0xFFEEEEEE),
+                    brightBlack: Color(0xFF666666),
+                    brightRed: Color(0xFFFF8A80),
+                    brightGreen: Color(0xFF69F0AE),
+                    brightYellow: Color(0xFFFFFF8D),
+                    brightBlue: Color(0xFF80D8FF),
+                    brightMagenta: Color(0xFFEA80FC),
+                    brightCyan: Color(0xFFA7FDEB),
+                    brightWhite: Color(0xFFFFFFFF),
+                    searchHitBackground: Color(0xFFFFE66D),
+                    searchHitBackgroundCurrent: Color(0xFFFF6B6B),
+                    searchHitForeground: Color(0xFF000000),
+                  ),
+                ),
+                if (_showSessionList)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: _buildSessionList(service),
+                  ),
+              ],
             ),
           ),
-          if (_showSessionList)
-            Positioned(
-              top: 0,
-              right: 0,
-              child: _buildSessionList(service),
-            ),
+          _buildShortcutBar(),
         ],
       ),
     );
@@ -260,6 +267,85 @@ class _TerminalScreenState extends State<TerminalScreen> {
               );
             }),
         ],
+      ),
+    );
+  }
+
+  bool _ctrlActive = false;
+
+  void _sendKey(String key) {
+    final service = context.read<ConnectionService>();
+    if (_ctrlActive) {
+      // Send Ctrl+key (ASCII control character)
+      final code = key.toUpperCase().codeUnitAt(0) - 64;
+      if (code > 0 && code < 32) {
+        service.sendInput(String.fromCharCode(code));
+      }
+      setState(() => _ctrlActive = false);
+    } else {
+      service.sendInput(key);
+    }
+  }
+
+  Widget _buildShortcutBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      decoration: const BoxDecoration(
+        color: Color(0xFF16213E),
+        border: Border(top: BorderSide(color: Color(0xFF333333))),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _shortcutBtn('ESC', () => _sendKey('\x1b')),
+            _shortcutBtn('TAB', () => _sendKey('\t')),
+            _shortcutBtn(
+              'CTRL',
+              () => setState(() => _ctrlActive = !_ctrlActive),
+              active: _ctrlActive,
+            ),
+            _shortcutBtn('Ctrl+C', () => _sendKey('\x03')),
+            _shortcutBtn('Ctrl+D', () => _sendKey('\x04')),
+            _shortcutBtn('Ctrl+Z', () => _sendKey('\x1a')),
+            _shortcutBtn('Ctrl+L', () => _sendKey('\x0c')),
+            _shortcutBtn('↑', () => _sendKey('\x1b[A')),
+            _shortcutBtn('↓', () => _sendKey('\x1b[B')),
+            _shortcutBtn('←', () => _sendKey('\x1b[D')),
+            _shortcutBtn('→', () => _sendKey('\x1b[C')),
+            _shortcutBtn('HOME', () => _sendKey('\x1b[H')),
+            _shortcutBtn('END', () => _sendKey('\x1b[F')),
+            _shortcutBtn('PGUP', () => _sendKey('\x1b[5~')),
+            _shortcutBtn('PGDN', () => _sendKey('\x1b[6~')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _shortcutBtn(String label, VoidCallback onTap, {bool active = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFF00D4AA) : const Color(0xFF1A1A2E),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: active ? const Color(0xFF00D4AA) : const Color(0xFF444444),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: active ? const Color(0xFF1A1A2E) : const Color(0xFFCCCCCC),
+            ),
+          ),
+        ),
       ),
     );
   }
