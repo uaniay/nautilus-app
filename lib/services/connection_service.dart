@@ -3,19 +3,30 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 
 class SessionInfo {
   final String id;
   final String command;
   final String createdAt;
+  final String cwd;
+  final String lastOutput;
 
-  SessionInfo({required this.id, required this.command, required this.createdAt});
+  SessionInfo({
+    required this.id,
+    required this.command,
+    required this.createdAt,
+    this.cwd = '',
+    this.lastOutput = '',
+  });
 
   factory SessionInfo.fromJson(Map<String, dynamic> json) {
     return SessionInfo(
       id: json['id'] ?? '',
       command: json['command'] ?? '',
       createdAt: json['created_at'] ?? '',
+      cwd: json['cwd'] ?? '',
+      lastOutput: json['last_output'] ?? '',
     );
   }
 }
@@ -30,6 +41,7 @@ class ConnectionService extends ChangeNotifier {
 
   final StreamController<String> _outputController = StreamController<String>.broadcast();
   final StreamController<Map<String, dynamic>> _eventController = StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _fsController = StreamController<Map<String, dynamic>>.broadcast();
 
   bool get isConnected => _isConnected;
   String get serverUrl => _serverUrl;
@@ -38,6 +50,7 @@ class ConnectionService extends ChangeNotifier {
   List<SessionInfo> get sessions => _sessions;
   Stream<String> get outputStream => _outputController.stream;
   Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
+  Stream<Map<String, dynamic>> get fsStream => _fsController.stream;
 
   Future<void> loadSavedSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -52,6 +65,31 @@ class ConnectionService extends ChangeNotifier {
     await prefs.setString('token', token);
     _serverUrl = url;
     _token = token;
+  }
+
+  Future<bool> login(String url, String username, String password) async {
+    try {
+      final loginUrl = Uri.parse('$url/api/login');
+      final response = await http.post(
+        loginUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
+      );
+
+      if (response.statusCode != 200) {
+        debugPrint('Login failed: ${response.statusCode} ${response.body}');
+        return false;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final token = data['token'] as String?;
+      if (token == null) return false;
+
+      return connect(url, token);
+    } catch (e) {
+      debugPrint('Login error: $e');
+      return false;
+    }
   }
 
   Future<bool> connect(String url, String token) async {
@@ -130,6 +168,7 @@ class ConnectionService extends ChangeNotifier {
           break;
 
         case 'session.output':
+          _eventController.add(msg);
           if (msg['session_id'] == _currentSessionId) {
             _outputController.add(msg['data'] ?? '');
           }
@@ -150,6 +189,14 @@ class ConnectionService extends ChangeNotifier {
           _eventController.add(msg);
           break;
 
+        case 'fs.list':
+          _fsController.add(msg);
+          break;
+
+        case 'fs.list.error':
+          _fsController.add(msg);
+          break;
+
         case 'error':
           _eventController.add(msg);
           break;
@@ -163,7 +210,7 @@ class ConnectionService extends ChangeNotifier {
     }
   }
 
-  void createSession(String command, {int cols = 80, int rows = 24}) {
+  void createSession(String command, {int cols = 80, int rows = 24, String? cwd}) {
     _send({
       'type': 'session.create',
       'command': command,
@@ -171,6 +218,7 @@ class ConnectionService extends ChangeNotifier {
       'env': <String, String>{},
       'cols': cols,
       'rows': rows,
+      if (cwd != null) 'cwd': cwd,
     });
   }
 
@@ -182,6 +230,14 @@ class ConnectionService extends ChangeNotifier {
         'data': data,
       });
     }
+  }
+
+  void sendInputToSession(String sessionId, String data) {
+    _send({
+      'type': 'session.input',
+      'session_id': sessionId,
+      'data': data,
+    });
   }
 
   void resizeSession(int cols, int rows) {
@@ -213,11 +269,16 @@ class ConnectionService extends ChangeNotifier {
     _send({'type': 'session.list'});
   }
 
+  void listDirectory(String path) {
+    _send({'type': 'fs.list', 'path': path});
+  }
+
   @override
   void dispose() {
     _channel?.sink.close();
     _outputController.close();
     _eventController.close();
+    _fsController.close();
     super.dispose();
   }
 }

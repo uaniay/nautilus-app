@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/connection_service.dart';
+import 'services/file_service.dart';
+import 'services/session_history_service.dart';
 import 'screens/connect_screen.dart';
-import 'screens/terminal_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() {
   runApp(const NautilusApp());
@@ -13,8 +15,20 @@ class NautilusApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ConnectionService(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ConnectionService()),
+        ChangeNotifierProxyProvider<ConnectionService, FileService>(
+          create: (_) => FileService(),
+          update: (_, connection, fileService) =>
+              fileService!..updateConnection(connection),
+        ),
+        ChangeNotifierProxyProvider<ConnectionService, SessionHistoryService>(
+          create: (_) => SessionHistoryService(),
+          update: (_, connection, historyService) =>
+              historyService!..updateConnection(connection),
+        ),
+      ],
       child: MaterialApp(
         title: 'Nautilus',
         debugShowCheckedModeBanner: false,
@@ -65,7 +79,7 @@ class AppRouter extends StatelessWidget {
   Widget build(BuildContext context) {
     final connection = context.watch<ConnectionService>();
     if (connection.isConnected) {
-      return const TerminalScreen();
+      return const HomeScreen();
     }
     return const ConnectScreen();
   }
