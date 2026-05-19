@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 
 class ShortcutBar extends StatefulWidget {
   final void Function(String data) onSend;
+  final VoidCallback? onMicPressed;
+  final bool isMicActive;
 
-  const ShortcutBar({super.key, required this.onSend});
+  const ShortcutBar({
+    super.key,
+    required this.onSend,
+    this.onMicPressed,
+    this.isMicActive = false,
+  });
 
   @override
   State<ShortcutBar> createState() => _ShortcutBarState();
@@ -36,6 +43,13 @@ class _ShortcutBarState extends State<ShortcutBar> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
+            if (widget.onMicPressed != null)
+              _shortcutBtn(
+                widget.isMicActive ? 'MIC ●' : 'MIC',
+                widget.onMicPressed!,
+                active: widget.isMicActive,
+                activeColor: Colors.redAccent,
+              ),
             _shortcutBtn('ESC', () => _sendKey('\x1b')),
             _shortcutBtn('TAB', () => _sendKey('\t')),
             _shortcutBtn(
@@ -61,7 +75,8 @@ class _ShortcutBarState extends State<ShortcutBar> {
     );
   }
 
-  Widget _shortcutBtn(String label, VoidCallback onTap, {bool active = false}) {
+  Widget _shortcutBtn(String label, VoidCallback onTap, {bool active = false, Color? activeColor}) {
+    final color = activeColor ?? const Color(0xFF00D4AA);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
       child: GestureDetector(
@@ -69,10 +84,10 @@ class _ShortcutBarState extends State<ShortcutBar> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFF00D4AA) : const Color(0xFF1A1A2E),
+            color: active ? color : const Color(0xFF1A1A2E),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: active ? const Color(0xFF00D4AA) : const Color(0xFF444444),
+              color: active ? color : const Color(0xFF444444),
             ),
           ),
           child: Text(

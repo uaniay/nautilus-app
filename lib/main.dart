@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'services/connection_service.dart';
 import 'services/file_service.dart';
 import 'services/session_history_service.dart';
+import 'services/voice_service.dart';
 import 'screens/connect_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -18,6 +19,7 @@ class NautilusApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ConnectionService()),
+        ChangeNotifierProvider(create: (_) => VoiceService()),
         ChangeNotifierProxyProvider<ConnectionService, FileService>(
           create: (_) => FileService(),
           update: (_, connection, fileService) =>

@@ -42,6 +42,7 @@ class ConnectionService extends ChangeNotifier {
   final StreamController<String> _outputController = StreamController<String>.broadcast();
   final StreamController<Map<String, dynamic>> _eventController = StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _fsController = StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _voiceController = StreamController<Map<String, dynamic>>.broadcast();
 
   bool get isConnected => _isConnected;
   String get serverUrl => _serverUrl;
@@ -51,6 +52,7 @@ class ConnectionService extends ChangeNotifier {
   Stream<String> get outputStream => _outputController.stream;
   Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
   Stream<Map<String, dynamic>> get fsStream => _fsController.stream;
+  Stream<Map<String, dynamic>> get voiceStream => _voiceController.stream;
 
   Future<void> loadSavedSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -197,6 +199,12 @@ class ConnectionService extends ChangeNotifier {
           _fsController.add(msg);
           break;
 
+        case 'voice.transcript':
+        case 'voice.status':
+        case 'voice.error':
+          _voiceController.add(msg);
+          break;
+
         case 'error':
           _eventController.add(msg);
           break;
@@ -273,12 +281,39 @@ class ConnectionService extends ChangeNotifier {
     _send({'type': 'fs.list', 'path': path});
   }
 
+  void sendVoiceStart(String sessionId, {String format = 'pcm16', int sampleRate = 16000, int channels = 1}) {
+    _send({
+      'type': 'voice.start',
+      'session_id': sessionId,
+      'format': format,
+      'sample_rate': sampleRate,
+      'channels': channels,
+    });
+  }
+
+  void sendVoiceData(String sessionId, String base64Data, int seq) {
+    _send({
+      'type': 'voice.data',
+      'session_id': sessionId,
+      'data': base64Data,
+      'seq': seq,
+    });
+  }
+
+  void sendVoiceStop(String sessionId) {
+    _send({
+      'type': 'voice.stop',
+      'session_id': sessionId,
+    });
+  }
+
   @override
   void dispose() {
     _channel?.sink.close();
     _outputController.close();
     _eventController.close();
     _fsController.close();
+    _voiceController.close();
     super.dispose();
   }
 }

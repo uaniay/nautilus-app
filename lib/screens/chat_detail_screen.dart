@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
 import '../services/connection_service.dart';
+import '../services/voice_service.dart';
 import '../widgets/shortcut_bar.dart';
 
 class ChatDetailScreen extends StatefulWidget {
@@ -18,7 +19,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   late Terminal _terminal;
   late TerminalController _terminalController;
   StreamSubscription<Map<String, dynamic>>? _eventSub;
-  StreamSubscription<String>? _outputSub;
 
   @override
   void initState() {
@@ -37,12 +37,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         connection.resizeSession(cols, rows);
       }
     };
-
-    _outputSub = connection.outputStream.listen((data) {
-      if (connection.currentSessionId == widget.session.id) {
-        _terminal.write(data);
-      }
-    });
 
     _eventSub = connection.eventStream.listen((msg) {
       final type = msg['type'];
@@ -75,58 +69,101 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void dispose() {
     _eventSub?.cancel();
-    _outputSub?.cancel();
     _terminalController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final voiceService = context.watch<VoiceService>();
+
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
       body: Column(
         children: [
           _buildAppBar(),
           Expanded(
-            child: TerminalView(
-              _terminal,
-              controller: _terminalController,
-              autofocus: true,
-              textStyle: const TerminalStyle(
-                fontSize: 14,
-                fontFamily: 'monospace',
-              ),
-              theme: const TerminalTheme(
-                cursor: Color(0xFF00D4AA),
-                selection: Color(0xFF33475B),
-                foreground: Color(0xFFEEEEEE),
-                background: Color(0xFF1A1A2E),
-                black: Color(0xFF000000),
-                red: Color(0xFFFF6B6B),
-                green: Color(0xFF00D4AA),
-                yellow: Color(0xFFFFE66D),
-                blue: Color(0xFF4ECDC4),
-                magenta: Color(0xFFC792EA),
-                cyan: Color(0xFF89DDFF),
-                white: Color(0xFFEEEEEE),
-                brightBlack: Color(0xFF666666),
-                brightRed: Color(0xFFFF8A80),
-                brightGreen: Color(0xFF69F0AE),
-                brightYellow: Color(0xFFFFFF8D),
-                brightBlue: Color(0xFF80D8FF),
-                brightMagenta: Color(0xFFEA80FC),
-                brightCyan: Color(0xFFA7FDEB),
-                brightWhite: Color(0xFFFFFFFF),
-                searchHitBackground: Color(0xFFFFE66D),
-                searchHitBackgroundCurrent: Color(0xFFFF6B6B),
-                searchHitForeground: Color(0xFF000000),
-              ),
+            child: Stack(
+              children: [
+                TerminalView(
+                  _terminal,
+                  controller: _terminalController,
+                  autofocus: true,
+                  textStyle: const TerminalStyle(
+                    fontSize: 14,
+                    fontFamily: 'monospace',
+                  ),
+                  theme: const TerminalTheme(
+                    cursor: Color(0xFF00D4AA),
+                    selection: Color(0xFF33475B),
+                    foreground: Color(0xFFEEEEEE),
+                    background: Color(0xFF1A1A2E),
+                    black: Color(0xFF000000),
+                    red: Color(0xFFFF6B6B),
+                    green: Color(0xFF00D4AA),
+                    yellow: Color(0xFFFFE66D),
+                    blue: Color(0xFF4ECDC4),
+                    magenta: Color(0xFFC792EA),
+                    cyan: Color(0xFF89DDFF),
+                    white: Color(0xFFEEEEEE),
+                    brightBlack: Color(0xFF666666),
+                    brightRed: Color(0xFFFF8A80),
+                    brightGreen: Color(0xFF69F0AE),
+                    brightYellow: Color(0xFFFFFF8D),
+                    brightBlue: Color(0xFF80D8FF),
+                    brightMagenta: Color(0xFFEA80FC),
+                    brightCyan: Color(0xFFA7FDEB),
+                    brightWhite: Color(0xFFFFFFFF),
+                    searchHitBackground: Color(0xFFFFE66D),
+                    searchHitBackgroundCurrent: Color(0xFFFF6B6B),
+                    searchHitForeground: Color(0xFF000000),
+                  ),
+                ),
+                if (voiceService.interimText.isNotEmpty)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      color: const Color(0xCC16213E),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.mic, color: Colors.redAccent, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              voiceService.interimText,
+                              style: const TextStyle(
+                                color: Color(0xFF00D4AA),
+                                fontSize: 13,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          ShortcutBar(onSend: (data) {
-            final connection = context.read<ConnectionService>();
-            connection.sendInputToSession(widget.session.id, data);
-          }),
+          ShortcutBar(
+            onSend: (data) {
+              final connection = context.read<ConnectionService>();
+              connection.sendInputToSession(widget.session.id, data);
+            },
+            isMicActive: voiceService.isRecording,
+            onMicPressed: () {
+              final connection = context.read<ConnectionService>();
+              if (voiceService.isRecording) {
+                voiceService.stopRecording(connection);
+              } else {
+                voiceService.startRecording(widget.session.id, connection);
+              }
+            },
+          ),
         ],
       ),
     );
