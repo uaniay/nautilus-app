@@ -250,13 +250,17 @@ class ConnectionService extends ChangeNotifier {
 
   void resizeSession(int cols, int rows) {
     if (_currentSessionId != null) {
-      _send({
-        'type': 'session.resize',
-        'session_id': _currentSessionId,
-        'cols': cols,
-        'rows': rows,
-      });
+      resizeSessionById(_currentSessionId!, cols, rows);
     }
+  }
+
+  void resizeSessionById(String sessionId, int cols, int rows) {
+    _send({
+      'type': 'session.resize',
+      'session_id': sessionId,
+      'cols': cols,
+      'rows': rows,
+    });
   }
 
   void killSession(String sessionId) {

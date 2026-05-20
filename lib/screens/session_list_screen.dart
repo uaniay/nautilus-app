@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/connection_service.dart';
 import '../services/session_history_service.dart';
-import 'chat_detail_screen.dart';
+import 'session_detail_screen.dart';
 
-class ChatListScreen extends StatefulWidget {
-  const ChatListScreen({super.key});
+class SessionListScreen extends StatefulWidget {
+  const SessionListScreen({super.key});
 
   @override
-  State<ChatListScreen> createState() => _ChatListScreenState();
+  State<SessionListScreen> createState() => _SessionListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _SessionListScreenState extends State<SessionListScreen> {
   @override
   void initState() {
     super.initState();
@@ -89,7 +89,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.white24),
+            Icon(Icons.terminal, size: 48, color: Colors.white24),
             SizedBox(height: 16),
             Text(
               'No active sessions',
@@ -97,7 +97,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              'Go to Files tab to start a Claude, Codex, or Bash session',
+              'Go to Files tab to start a session',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white38, fontSize: 13),
             ),
@@ -115,7 +115,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ChatDetailScreen(session: session),
+            builder: (_) => SessionDetailScreen(session: session),
           ),
         );
       },

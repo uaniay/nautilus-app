@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/file_service.dart';
 import '../services/connection_service.dart';
 import '../models/file_entry.dart';
-import 'chat_detail_screen.dart';
+import 'session_detail_screen.dart';
 
 class FileBrowserScreen extends StatefulWidget {
   const FileBrowserScreen({super.key});
@@ -44,7 +44,7 @@ class _FileBrowserScreenState extends State<FileBrowserScreen> {
         if (mounted) {
           navigator.push(
             MaterialPageRoute(
-              builder: (_) => ChatDetailScreen(session: session),
+              builder: (_) => SessionDetailScreen(session: session),
             ),
           );
         }

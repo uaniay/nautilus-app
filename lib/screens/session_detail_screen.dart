@@ -6,16 +6,16 @@ import '../services/connection_service.dart';
 import '../services/voice_service.dart';
 import '../widgets/shortcut_bar.dart';
 
-class ChatDetailScreen extends StatefulWidget {
+class SessionDetailScreen extends StatefulWidget {
   final SessionInfo session;
 
-  const ChatDetailScreen({super.key, required this.session});
+  const SessionDetailScreen({super.key, required this.session});
 
   @override
-  State<ChatDetailScreen> createState() => _ChatDetailScreenState();
+  State<SessionDetailScreen> createState() => _SessionDetailScreenState();
 }
 
-class _ChatDetailScreenState extends State<ChatDetailScreen> {
+class _SessionDetailScreenState extends State<SessionDetailScreen> {
   late Terminal _terminal;
   late TerminalController _terminalController;
   StreamSubscription<Map<String, dynamic>>? _eventSub;
@@ -33,9 +33,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     };
 
     _terminal.onResize = (cols, rows, _, __) {
-      if (connection.currentSessionId == widget.session.id) {
-        connection.resizeSession(cols, rows);
-      }
+      connection.resizeSessionById(widget.session.id, cols, rows);
     };
 
     _eventSub = connection.eventStream.listen((msg) {
@@ -44,7 +42,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
       switch (type) {
         case 'session.attached':
-          _terminal.write('\x1b[2J\x1b[H');
+          final replay = msg['replay'] as String?;
+          if (replay != null && replay.isNotEmpty) {
+            _terminal.write(replay);
+          }
           break;
         case 'session.output':
           _terminal.write(msg['data'] ?? '');

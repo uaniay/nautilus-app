@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'file_browser_screen.dart';
-import 'chat_list_screen.dart';
-import 'terminal_screen.dart';
+import 'session_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,8 +23,7 @@ class HomeScreenState extends State<HomeScreen> {
         index: _currentIndex,
         children: const [
           FileBrowserScreen(),
-          ChatListScreen(),
-          TerminalScreen(),
+          SessionListScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -42,13 +40,9 @@ class HomeScreenState extends State<HomeScreen> {
             label: 'Files',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_outlined),
-            activeIcon: Icon(Icons.chat),
-            label: 'Chat',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.terminal),
-            label: 'Term',
+            icon: Icon(Icons.layers_outlined),
+            activeIcon: Icon(Icons.layers),
+            label: 'Sessions',
           ),
         ],
       ),
