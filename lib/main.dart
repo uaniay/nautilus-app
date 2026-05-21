@@ -2,17 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/connection_service.dart';
 import 'services/file_service.dart';
+import 'services/notification_service.dart';
 import 'services/session_history_service.dart';
+import 'services/session_label_service.dart';
 import 'services/voice_service.dart';
 import 'screens/connect_screen.dart';
 import 'screens/home_screen.dart';
 
-void main() {
-  runApp(const NautilusApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final notificationService = NotificationService();
+  await notificationService.init();
+  runApp(NautilusApp(notificationService: notificationService));
 }
 
-class NautilusApp extends StatelessWidget {
-  const NautilusApp({super.key});
+class NautilusApp extends StatefulWidget {
+  final NotificationService notificationService;
+
+  const NautilusApp({super.key, required this.notificationService});
+
+  @override
+  State<NautilusApp> createState() => _NautilusAppState();
+}
+
+class _NautilusAppState extends State<NautilusApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.notificationService.setAppInBackground(
+      state == AppLifecycleState.paused || state == AppLifecycleState.inactive,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +51,8 @@ class NautilusApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ConnectionService()),
         ChangeNotifierProvider(create: (_) => VoiceService()),
+        ChangeNotifierProvider(create: (_) => SessionLabelService()..load()),
+        ChangeNotifierProvider.value(value: widget.notificationService),
         ChangeNotifierProxyProvider<ConnectionService, FileService>(
           create: (_) => FileService(),
           update: (_, connection, fileService) =>
@@ -74,15 +107,31 @@ class NautilusApp extends StatelessWidget {
   }
 }
 
-class AppRouter extends StatelessWidget {
+class AppRouter extends StatefulWidget {
   const AppRouter({super.key});
+
+  @override
+  State<AppRouter> createState() => _AppRouterState();
+}
+
+class _AppRouterState extends State<AppRouter> {
+  bool _notificationsWired = false;
 
   @override
   Widget build(BuildContext context) {
     final connection = context.watch<ConnectionService>();
-    if (connection.isConnected) {
+    final labelService = context.watch<SessionLabelService>();
+    final notificationService = context.read<NotificationService>();
+
+    if (!_notificationsWired && connection.isConnected) {
+      notificationService.updateDependencies(connection, labelService);
+      _notificationsWired = true;
+    }
+
+    if (connection.isConnected || connection.isConnecting) {
       return const HomeScreen();
     }
+    _notificationsWired = false;
     return const ConnectScreen();
   }
 }

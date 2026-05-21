@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,20 +32,31 @@ class SessionInfo {
   }
 }
 
+enum ConnectionState { disconnected, connecting, connected }
+
 class ConnectionService extends ChangeNotifier {
   WebSocketChannel? _channel;
-  bool _isConnected = false;
+  ConnectionState _state = ConnectionState.disconnected;
   String _serverUrl = '';
   String _token = '';
   String? _currentSessionId;
   List<SessionInfo> _sessions = [];
+
+  // Reconnection state
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+  static const int _maxReconnectDelay = 30;
+  bool _intentionalDisconnect = false;
+  final Set<String> _activeSessionIds = {};
 
   final StreamController<String> _outputController = StreamController<String>.broadcast();
   final StreamController<Map<String, dynamic>> _eventController = StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _fsController = StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _voiceController = StreamController<Map<String, dynamic>>.broadcast();
 
-  bool get isConnected => _isConnected;
+  bool get isConnected => _state == ConnectionState.connected;
+  bool get isConnecting => _state == ConnectionState.connecting;
+  ConnectionState get connectionState => _state;
   String get serverUrl => _serverUrl;
   String get token => _token;
   String? get currentSessionId => _currentSessionId;
@@ -96,6 +108,9 @@ class ConnectionService extends ChangeNotifier {
 
   Future<bool> connect(String url, String token) async {
     try {
+      _state = ConnectionState.connecting;
+      notifyListeners();
+
       await saveSettings(url, token);
 
       final wsUrl = url.replaceFirst('http://', 'ws://').replaceFirst('https://', 'wss://');
@@ -104,9 +119,11 @@ class ConnectionService extends ChangeNotifier {
       _channel = WebSocketChannel.connect(uri);
       await _channel!.ready;
 
-      _isConnected = true;
+      _state = ConnectionState.connected;
       _serverUrl = url;
       _token = token;
+      _reconnectAttempt = 0;
+      _intentionalDisconnect = false;
       notifyListeners();
 
       _channel!.stream.listen(
@@ -117,35 +134,79 @@ class ConnectionService extends ChangeNotifier {
 
       return true;
     } catch (e) {
-      _isConnected = false;
+      _state = ConnectionState.disconnected;
       notifyListeners();
       return false;
     }
   }
 
   void disconnect() {
+    _intentionalDisconnect = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _channel?.sink.close();
     _channel = null;
-    _isConnected = false;
+    _state = ConnectionState.disconnected;
     _currentSessionId = null;
+    _activeSessionIds.clear();
     notifyListeners();
   }
 
   void _onDisconnected() {
-    _isConnected = false;
-    _currentSessionId = null;
+    _state = ConnectionState.disconnected;
+    _channel = null;
     notifyListeners();
     _eventController.add({'type': 'disconnected'});
+
+    if (!_intentionalDisconnect) {
+      _scheduleReconnect();
+    }
   }
 
-  void reconnect() {
-    if (_serverUrl.isNotEmpty && _token.isNotEmpty) {
-      connect(_serverUrl, _token).then((success) {
-        if (success && _currentSessionId != null) {
-          attachSession(_currentSessionId!);
-        }
-      });
+  void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    final delay = min(
+      pow(2, _reconnectAttempt).toInt(),
+      _maxReconnectDelay,
+    );
+    _reconnectAttempt++;
+
+    debugPrint('Reconnecting in ${delay}s (attempt $_reconnectAttempt)');
+    _state = ConnectionState.connecting;
+    notifyListeners();
+
+    _reconnectTimer = Timer(Duration(seconds: delay), () {
+      _attemptReconnect();
+    });
+  }
+
+  Future<void> _attemptReconnect() async {
+    if (_serverUrl.isEmpty || _token.isEmpty) return;
+
+    final success = await connect(_serverUrl, _token);
+    if (success) {
+      _eventController.add({'type': 'reconnected'});
+      _reattachSessions();
+    } else {
+      _scheduleReconnect();
     }
+  }
+
+  void _reattachSessions() {
+    if (_activeSessionIds.isNotEmpty) {
+      for (final sessionId in _activeSessionIds) {
+        attachSession(sessionId);
+      }
+    }
+    listSessions();
+  }
+
+  void trackSession(String sessionId) {
+    _activeSessionIds.add(sessionId);
+  }
+
+  void untrackSession(String sessionId) {
+    _activeSessionIds.remove(sessionId);
   }
 
   void _handleMessage(dynamic data) {
@@ -156,6 +217,7 @@ class ConnectionService extends ChangeNotifier {
       switch (type) {
         case 'session.created':
           _currentSessionId = msg['session_id'];
+          _activeSessionIds.add(msg['session_id'] as String);
           notifyListeners();
           _eventController.add(msg);
           break;
@@ -177,7 +239,9 @@ class ConnectionService extends ChangeNotifier {
           break;
 
         case 'session.exit':
-          if (msg['session_id'] == _currentSessionId) {
+          final exitedId = msg['session_id'] as String?;
+          _activeSessionIds.remove(exitedId);
+          if (exitedId == _currentSessionId) {
             _currentSessionId = null;
             notifyListeners();
           }
@@ -213,7 +277,7 @@ class ConnectionService extends ChangeNotifier {
   }
 
   void _send(Map<String, dynamic> msg) {
-    if (_channel != null && _isConnected) {
+    if (_channel != null && _state == ConnectionState.connected) {
       _channel!.sink.add(jsonEncode(msg));
     }
   }
@@ -271,6 +335,7 @@ class ConnectionService extends ChangeNotifier {
   }
 
   void attachSession(String sessionId) {
+    _activeSessionIds.add(sessionId);
     _send({
       'type': 'session.attach',
       'session_id': sessionId,
@@ -313,6 +378,7 @@ class ConnectionService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _reconnectTimer?.cancel();
     _channel?.sink.close();
     _outputController.close();
     _eventController.close();

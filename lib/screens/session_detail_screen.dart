@@ -38,6 +38,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
     _eventSub = connection.eventStream.listen((msg) {
       final type = msg['type'];
+
+      if (type == 'reconnected') {
+        _terminal.write('\r\n\x1b[32m[Reconnected]\x1b[0m\r\n');
+        return;
+      }
+      if (type == 'disconnected') {
+        _terminal.write('\r\n\x1b[33m[Connection lost, reconnecting...]\x1b[0m\r\n');
+        return;
+      }
+
       if (msg['session_id'] != widget.session.id) return;
 
       switch (type) {
@@ -64,6 +74,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       }
     });
 
+    connection.trackSession(widget.session.id);
     connection.attachSession(widget.session.id);
   }
 
@@ -71,18 +82,22 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   void dispose() {
     _eventSub?.cancel();
     _terminalController.dispose();
+    context.read<ConnectionService>().untrackSession(widget.session.id);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final voiceService = context.watch<VoiceService>();
+    final connection = context.watch<ConnectionService>();
 
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
       body: Column(
         children: [
           _buildAppBar(),
+          if (!connection.isConnected)
+            _buildConnectionBanner(connection),
           Expanded(
             child: Stack(
               children: [
@@ -232,6 +247,42 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildConnectionBanner(ConnectionService connection) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: connection.isConnecting
+          ? const Color(0xFFFFE66D).withValues(alpha: 0.15)
+          : Colors.redAccent.withValues(alpha: 0.15),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (connection.isConnecting)
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: Color(0xFFFFE66D),
+              ),
+            )
+          else
+            const Icon(Icons.cloud_off, size: 14, color: Colors.redAccent),
+          const SizedBox(width: 8),
+          Text(
+            connection.isConnecting ? 'Reconnecting...' : 'Disconnected',
+            style: TextStyle(
+              fontSize: 12,
+              color: connection.isConnecting
+                  ? const Color(0xFFFFE66D)
+                  : Colors.redAccent,
+            ),
+          ),
+        ],
       ),
     );
   }
